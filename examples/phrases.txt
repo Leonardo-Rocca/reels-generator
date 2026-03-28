@@ -1,0 +1,56 @@
+
+#Reel de lunas con prompts
+
+<title> Lunas </title>
+<body></body>
+<image>moon.png</image>
+
+#Contenido
+
+<title> Aries </title>
+<body> Querés resolver todo ya. </body>
+<prompt> Un reloj de arena antiguo sobre una mesa de mármol, con la arena cayendo a una velocidad frenética, rodeado de chispas doradas sutiles que sugieren urgencia y agotamiento. </prompt>
+
+<title> Tauro </title>
+<body> No soltás porque aprendiste que perder es peligroso. </body>
+<prompt> Una mano delicada con anillos dorados cerrando un puño con fuerza sobre un puñado de arena húmeda, con algunas gotas de agua escapando entre los dedos sobre un fondo beige neutro. </prompt>
+
+<title> Géminis </title>
+<body> Explicar lo que sentís no es lo mismo que sentirlo. </body>
+<prompt> Un libro abierto cuyas páginas se transforman en una nube de mariposas azules transparentes que revolotean, representando la distancia entre la palabra y la emoción pura. </prompt>
+
+<title> Cáncer </title>
+<body> Seguís protegiéndote como si todavía fueras ese chico. </body>
+<prompt> Un caparazón de caracol de mar sobredimensionado y brillante sobre una sábana de lino blanca, con una luz cálida que sugiere un refugio que ya quedó pequeño. </prompt>
+
+<title> Leo </title>
+<body> Necesitás que te vean para sentir que existís. </body>
+<prompt> Un espejo antiguo con marco dorado barroco colocado en medio de un desierto vacío, reflejando un sol radiante pero solitario bajo un cielo azul profundo. </prompt>
+
+<title> Virgo </title>
+<body> Creíste que siendo perfecto ibas a ser querido. </body>
+<prompt> Una escultura de mármol blanco de una mano intentando sostener una gota de agua perfecta, con líneas de grietas doradas (estilo kintsugi) que empiezan a aparecer en la piedra. </prompt>
+
+<title> Libra </title>
+<body> Decís que sí para que todo esté bien. </body>
+<prompt> Una balanza de metal dorado en perfecto equilibrio, pero uno de los platos está cargado con piedras pesadas y el otro está vacío, sobre un fondo de seda azul suave. </prompt>
+
+<title> Escorpio </title>
+<body> Sentís todo al máximo y eso te pesa. </body>
+<prompt> Una rosa de color rojo oscuro sumergida profundamente en agua azul cristalina, con burbujas de aire rodeando los pétalos y una sensación de presión profunda y belleza oculta. </prompt>
+
+<title> Sagitario </title>
+<body> Le llamás optimismo pero es una escapada. </body>
+<prompt> Un par de alas blancas de tela liviana atadas a una maleta de cuero antigua, flotando sobre un horizonte infinito donde el cielo se funde con el mar en tonos beige y azul. </prompt>
+
+<title> Capricornio </title>
+<body> Te acostumbraste a sostener todo. </body>
+<prompt> Un par de manos cansadas sosteniendo una esfera de piedra pesada que tiene grabadas constelaciones doradas, bajo una luz cenital dramática que resalta el esfuerzo. </prompt>
+
+<title> Acuario </title>
+<body> Te alejás antes de que te pierdan. </body>
+<prompt> Una figura humana hecha de estrellas y luz que se desvanece gradualmente en el aire, dejando atrás solo una estela de polvo cósmico azul sobre un fondo oscuro. </prompt>
+
+<title> Piscis </title>
+<body> El mundo te entra sin filtro. </body>
+<prompt> Una hoja de papel transparente bajo la lluvia, donde las gotas de agua mezcladas con tinta azul se absorben y expanden sin control, creando formas abstractas y melancólicas. </prompt>

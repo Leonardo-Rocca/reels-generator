@@ -1,0 +1,35 @@
+#Reel de lunas con imagenes
+
+<title center> Un resumen de la serie de lunas </title>
+<image>moon.png</image>
+<duration>1.0</duration>
+
+##Contenido
+
+<title> Luna en Aries </title>
+<body> Querés resolver todo ya </body>
+<image>reloj.png</image>
+
+<title> Luna en Tauro </title>
+<body> No soltás porque aprendiste que perder es peligroso </body>
+<image>arena.png</image>
+
+<title> Luna en Géminis </title>
+<body> Explicar lo que sentís no es lo mismo que sentirlo </body>
+<image>mariposas.png</image>
+
+<title> Luna en Cáncer </title>
+<body> Seguís protegiéndote como si todavía fueras ese chico </body>
+<image>caracol.png</image>
+
+
+<title> Luna en Virgo </title>
+<body> Creíste que siendo perfecto ibas a ser querido. </body>
+<image>mano.png</image>
+
+##Footer
+
+<title center> Más información en los posts especificos de cada luna </title>
+<image>moon.png</image>
+<duration>1.0</duration>
+

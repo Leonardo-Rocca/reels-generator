@@ -1,3 +1,18 @@
-.DS_Store
-reels
+# Environment
 .env
+.venv/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Project artifacts
+.reels_cache/
+reels/
+
+# Streamlit
+.streamlit/secrets.toml

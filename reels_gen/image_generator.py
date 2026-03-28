@@ -54,11 +54,18 @@ def generate_image(slide: Slide, work_dir: Path, config: Config) -> Path:
 
 ASSETS_IMAGES_DIR = Path(__file__).parent.parent / "assets" / "images"
 
-def generate_all(slides: list[Slide], work_dir: Path, config: Config, progress_callback: Callable[[int, int], None] | None = None) -> None:
+def generate_all(
+    slides: list[Slide],
+    work_dir: Path,
+    config: Config,
+    progress_callback: Callable[[int, int], None] | None = None,
+    assets_images_dir: Path | None = None,
+) -> None:
+    images_dir = assets_images_dir or ASSETS_IMAGES_DIR
     work_dir.mkdir(parents=True, exist_ok=True)
     for i, slide in enumerate(slides):
         if slide.phrase.image_file:
-            local = ASSETS_IMAGES_DIR / slide.phrase.image_file
+            local = images_dir / slide.phrase.image_file
             if not local.exists():
                 raise FileNotFoundError(f"Image not found: {local}")
             slide.image_path = local

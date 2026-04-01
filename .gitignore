@@ -13,6 +13,7 @@ __pycache__/
 # Project artifacts
 .reels_cache/
 reels/
+.idea
 
 # Streamlit
 .streamlit/secrets.toml

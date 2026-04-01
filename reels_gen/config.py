@@ -10,7 +10,7 @@ class Config(BaseModel):
     fps: int = 30
 
     # Timing
-    slide_duration: float = 2.8  # seconds per slide
+    slide_duration: float = 3.0  # seconds per slide
     transition_duration: float = 0.2
 
     # Text styling

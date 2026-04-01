@@ -8,6 +8,28 @@ import tempfile
 import uuid
 from pathlib import Path
 
+# ── Backdrop colour palette ───────────────────────────────────────────────────
+
+BACKDROP_PALETTE: dict[str, tuple[int, int, int]] = {
+    "#130e2d": (20, 10, 45),
+    "#231F20": (35, 31, 32),
+    "#000000": (0, 0, 0),
+    "#264F5E": (38, 79, 94),
+    "#4D7D7D": (77, 125, 125),
+    "#474A8C": (71, 74, 140),
+    "#F5E6D3": (245, 230, 211),
+    "#FBF3F6": (251, 243, 246),
+    "#D1CAAE": (209, 202, 174),
+    "#E5AF6E": (229, 175, 110),
+    "#F6F0E7": (246, 240, 231),
+}
+BACKDROP_ALPHA = 170
+
+
+def _text_color_for_bg(r: int, g: int, b: int) -> str:
+    """Return 'white' or 'black' based on perceived luminance (ITU-R BT.601)."""
+    return "black" if (r * 299 + g * 587 + b * 114) / 1000 > 128 else "white"
+
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -86,6 +108,45 @@ st.caption(
     "Build your reel slide by slide — each card is one scene. "
     "Leave **Body** empty to center the title on screen."
 )
+st.divider()
+
+# ── Style settings ────────────────────────────────────────────────────────────
+# Rendered FIRST so [data-testid="stHorizontalBlock"]:first-of-type targets only these buttons.
+
+if "backdrop_color_key" not in st.session_state:
+    st.session_state.backdrop_color_key = next(iter(BACKDROP_PALETTE))
+
+st.caption("COLOR DEL FONDO DEL TEXTO")
+
+_palette_items = list(BACKDROP_PALETTE.items())
+_mid = (len(_palette_items) + 1) // 2
+for _row_items in (_palette_items[:_mid], _palette_items[_mid:]):
+    _swatch_cols = st.columns(len(_row_items))
+    for _col, (_name, (_r, _g, _b)) in zip(_swatch_cols, _row_items):
+        _selected = st.session_state.backdrop_color_key == _name
+        _text = _text_color_for_bg(_r, _g, _b)
+        _border = "2px solid #6c63ff" if _selected else "2px solid transparent"
+        _cls = _name.replace("#", "hex")
+        with _col:
+            st.markdown(
+                f"<style>:has(.sw-{_cls}) + * button{{"
+                f"background:rgb({_r},{_g},{_b}) !important;"
+                f"color:{_text} !important;"
+                f"border:{_border} !important;"
+                f"border-radius:6px !important;height:40px;"
+                f"}}</style>"
+                f'<div class="sw-{_cls}"></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                _name,
+                key=f"sw_{_name}",
+                help=_name,
+                use_container_width=True,
+            ):
+                st.session_state.backdrop_color_key = _name
+                st.rerun()
+
 st.divider()
 
 # ── Slide cards ───────────────────────────────────────────────────────────────
@@ -200,6 +261,9 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
 
     from reels_gen.config import Config
     config = Config.from_env()
+    _bg = BACKDROP_PALETTE[st.session_state.get("backdrop_color_key", "Original")]
+    config.text_backdrop_color = (*_bg, BACKDROP_ALPHA)
+    config.text_color = _text_color_for_bg(*_bg)
 
     if not config.hf_token:
         st.error(

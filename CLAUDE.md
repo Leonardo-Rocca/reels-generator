@@ -77,3 +77,15 @@ El tiempo es relativo.
 - `assets/logo.png` — overlaid bottom-right if present (optional)
 - `assets/fonts/` — Montserrat Bold (auto-downloaded on first run)
 - `.reels_cache/` — persistent image cache (do not delete between runs if you want to resume)
+
+# Token Efficient Rules
+
+1. Think before acting. Read existing files before writing code.
+2. Be concise in output but thorough in reasoning.
+3. Prefer editing over rewriting whole files.
+4. Do not re-read files you have already read unless the file may have changed.
+5. Test your code before declaring done.
+6. No sycophantic openers or closing fluff.
+7. Keep solutions simple and direct.
+8. User instructions always override this file.
+9. Always answer in spanish

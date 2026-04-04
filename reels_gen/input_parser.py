@@ -87,8 +87,8 @@ def _parse_txt(text: str) -> list[Phrase]:
             duration = float(dur_str)
             i = j
 
-        if body:
-            phrases.append(Phrase(text=body, title=title, body_position=body_position, image_prompt=image_prompt, image_file=image_file, duration=duration))
+        if body or image_file:
+            phrases.append(Phrase(text=body or "", title=title, body_position=body_position, image_prompt=image_prompt, image_file=image_file, duration=duration))
         i += 1
     return phrases
 

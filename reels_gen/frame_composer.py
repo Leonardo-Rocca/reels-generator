@@ -100,7 +100,8 @@ def compose_frame(slide: Slide, work_dir: Path, config: Config) -> Path:
     else:  # top
         text_y = config.text_edge_margin
 
-    img = _draw_text_block(img, lines, font, text_y, config)
+    if lines:
+        img = _draw_text_block(img, lines, font, text_y, config)
 
     # Draw title at top if present
     if slide.phrase.title:
@@ -125,7 +126,7 @@ def compose_frame(slide: Slide, work_dir: Path, config: Config) -> Path:
         base.paste(logo, (x, y), mask=logo)
         img = base.convert("RGB")
 
-    slide_hash = hashlib.md5(slide.phrase.text.encode()).hexdigest()[:8]
+    slide_hash = hashlib.md5(f"{slide.phrase.text}|{slide.image_path}".encode()).hexdigest()[:8]
     out_path = work_dir / f"frame_{slide_hash}.png"
     img.save(out_path)
     slide.frame_path = out_path

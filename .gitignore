@@ -9,6 +9,7 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+reels_gen/__pycache__/*
 
 # Project artifacts
 .reels_cache/

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import shutil
 import tempfile
@@ -74,7 +76,7 @@ st.markdown(
 
 # ── Session state ─────────────────────────────────────────────────────────────
 
-DEFAULT_DURATION: float = 2.8
+DEFAULT_DURATION: float = 3.0
 
 
 def _new_slide() -> dict:
@@ -92,6 +94,10 @@ if "slides" not in st.session_state:
     st.session_state.slides = [_new_slide()]
 if "video_bytes" not in st.session_state:
     st.session_state.video_bytes = None
+if "backdrop_color_key" not in st.session_state:
+    st.session_state.backdrop_color_key = next(iter(BACKDROP_PALETTE))
+if "draft_uploader_key" not in st.session_state:
+    st.session_state.draft_uploader_key = 0
 
 slides: list[dict] = st.session_state.slides
 
@@ -101,20 +107,122 @@ def _delete_slide(idx: int) -> None:
     st.session_state.slides.pop(idx)
     st.session_state.video_bytes = None
 
+
+def _session_to_draft() -> bytes:
+    """Serialize current session state to JSON bytes for local download."""
+    slides_data = []
+    for s in st.session_state.slides:
+        img_b64 = base64.b64encode(s["image_bytes"]).decode() if s["image_bytes"] else None
+        slides_data.append({
+            "id": s["id"],
+            "title": s["title"],
+            "body": s["body"],
+            "image_file": s["image_file"],
+            "image_b64": img_b64,
+            "duration": s["duration"],
+        })
+    draft = {
+        "version": 1,
+        "backdrop_color_key": st.session_state.backdrop_color_key,
+        "slides": slides_data,
+    }
+    return json.dumps(draft, ensure_ascii=False, indent=2).encode()
+
+
+def _load_draft(raw: bytes) -> str | None:
+    """Restore session state from draft JSON bytes. Returns error message or None."""
+    try:
+        draft = json.loads(raw)
+    except json.JSONDecodeError:
+        return "El archivo no es un JSON válido."
+
+    if draft.get("version") != 1:
+        return "Versión de borrador no soportada."
+
+    slides = []
+    for s in draft.get("slides", []):
+        img_bytes = base64.b64decode(s["image_b64"]) if s.get("image_b64") else None
+        slides.append({
+            "id": s.get("id") or uuid.uuid4().hex[:8],
+            "title": s.get("title", ""),
+            "body": s.get("body", ""),
+            "image_file": s.get("image_file"),
+            "image_bytes": img_bytes,
+            "duration": float(s.get("duration", DEFAULT_DURATION)),
+        })
+
+    if not slides:
+        return "El borrador no contiene slides."
+
+    st.session_state.slides = slides
+    color_key = draft.get("backdrop_color_key")
+    if color_key in BACKDROP_PALETTE:
+        st.session_state.backdrop_color_key = color_key
+    st.session_state.video_bytes = None
+    return None
+
+
 # ── Header ────────────────────────────────────────────────────────────────────
+
+if st.session_state.pop("_show_draft_toast", False):
+    st.toast("Borrador cargado", icon="✅")
 
 st.markdown("# Reels *studio*")
 st.caption(
     "Build your reel slide by slide — each card is one scene. "
-    "Leave **Body** empty to center the title on screen."
+    "Leave **Body** empty to center the title. Leave both empty for an image-only slide."
 )
 st.divider()
 
-# ── Style settings ────────────────────────────────────────────────────────────
-# Rendered FIRST so [data-testid="stHorizontalBlock"]:first-of-type targets only these buttons.
+# ── Draft: save / load ────────────────────────────────────────────────────────
 
-if "backdrop_color_key" not in st.session_state:
-    st.session_state.backdrop_color_key = next(iter(BACKDROP_PALETTE))
+with st.expander("Descargar/Cargar Borrador", expanded=True):
+    _col_save, _col_load = st.columns(2)
+
+    with _col_save:
+        with st.container(border=True):
+            st.download_button(
+                "⬇  Guardar borrador",
+                data=_session_to_draft(),
+                file_name="borrador.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+            st.caption("Descarga el borrador para retomarlo después.")
+
+    with _col_load:
+        st.markdown(
+            "<style>"
+            "[data-testid='stColumn']:has(.draft-uploader-wrap)"
+            " [data-testid='stFileUploaderDropzone'] button span { display:none; }"
+            "[data-testid='stColumn']:has(.draft-uploader-wrap)"
+            " [data-testid='stFileUploaderDropzone'] button::after { content:'⬆ Cargar borrador'; }"
+            "[data-testid='stColumn']:has(.draft-uploader-wrap)"
+            " [data-testid='stElementContainer']:has(.draft-uploader-wrap)"
+            " { display:none !important; }"
+            "</style>"
+            '<div class="draft-uploader-wrap"></div>',
+            unsafe_allow_html=True,
+        )
+        _uploaded_draft = st.file_uploader(
+            "⬆ Cargar borrador",
+            type=["json"],
+            key=f"draft_uploader_{st.session_state.draft_uploader_key}",
+            label_visibility="collapsed",
+            help="Carga un borrador previamente guardado.",
+        )
+        if _uploaded_draft is not None:
+            _err = _load_draft(_uploaded_draft.getvalue())
+            if _err:
+                st.error(_err)
+            else:
+                st.session_state.draft_uploader_key += 1
+                st.session_state._show_draft_toast = True
+                st.rerun()
+
+st.divider()
+
+# ── Style settings ────────────────────────────────────────────────────────────
 
 st.caption("COLOR DEL FONDO DEL TEXTO")
 
@@ -175,7 +283,7 @@ for i, slide in enumerate(slides):
 
         # Fields — keyed by stable sid so widget state travels with the slide
         slide["title"] = st.text_input(
-            "Title",
+            "Title (optional)",
             value=slide["title"],
             key=f"title_{sid}",
             placeholder="Luna Nueva",
@@ -197,8 +305,9 @@ for i, slide in enumerate(slides):
         if uploaded is not None:
             slide["image_bytes"] = uploaded.getvalue()
             slide["image_file"] = uploaded.name
+        if slide["image_bytes"]:
             st.image(slide["image_bytes"], width=200)
-        else:
+        elif uploaded is None:
             slide["image_bytes"] = None
             slide["image_file"] = None
 
@@ -232,8 +341,10 @@ def _build_txt(slides: list[dict]) -> str:
         body  = (s["body"]  or "").strip()
         img   = (s["image_file"] or "").strip()
 
-        if body:
+        if title and body:
             lines.append(f"<title>{title}</title>")
+            lines.append(f"<body>{body}</body>")
+        elif body:
             lines.append(f"<body>{body}</body>")
         else:
             lines.append(f"<title center>{title}</title>")
@@ -250,10 +361,6 @@ def _build_txt(slides: list[dict]) -> str:
 if st.button("▶  Generate Reel", type="primary", use_container_width=True):
 
     # Basic validation
-    if not all((s["title"] or "").strip() for s in slides):
-        st.error("Every slide needs a title.")
-        st.stop()
-
     missing_images = [i + 1 for i, s in enumerate(slides) if not s["image_bytes"]]
     if missing_images:
         st.error(f"Missing image on slide{'s' if len(missing_images) > 1 else ''}: {', '.join(map(str, missing_images))}.")

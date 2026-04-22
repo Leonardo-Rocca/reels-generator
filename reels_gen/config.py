@@ -36,8 +36,9 @@ class Config(BaseModel):
     # image_style_suffix: str = "dark mystical illustration, deep indigo and violet palette, crescent moon, scattered stars, nebula background, soft glowing light, elegant and spiritual mood, artstation quality"
 
     # Logo overlay
-    logo_max_width: int = 360     # px
-    logo_margin: int = 60         # distance from right/bottom edges
+    logo_max_width: int = 560     # px
+    logo_margin: int = 1         # distance from right edge
+    logo_margin_y: int = -290       # distance from bottom edge (use negative to push further down/off-screen)
     logo_opacity: float = 0.65    # 0.0 = invisible, 1.0 = fully opaque
 
     # Video

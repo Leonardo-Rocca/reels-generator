@@ -121,7 +121,7 @@ def compose_frame(slide: Slide, work_dir: Path, config: Config) -> Path:
         a = a.point(lambda v: int(v * config.logo_opacity))
         logo.putalpha(a)
         x = config.width - logo.width - config.logo_margin
-        y = config.height - logo.height - config.logo_margin
+        y = config.height - logo.height - config.logo_margin_y
         base = img.convert("RGBA")
         base.paste(logo, (x, y), mask=logo)
         img = base.convert("RGB")

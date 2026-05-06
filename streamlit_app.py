@@ -100,6 +100,8 @@ if "backdrop_color_key" not in st.session_state:
     st.session_state.backdrop_color_key = next(iter(BACKDROP_PALETTE))
 if "draft_uploader_key" not in st.session_state:
     st.session_state.draft_uploader_key = 0
+if "draft_saved" not in st.session_state:
+    st.session_state.draft_saved = False
 
 slides: list[dict] = st.session_state.slides
 
@@ -183,13 +185,14 @@ with st.expander("Descargar/Cargar Borrador", expanded=True):
 
     with _col_save:
         with st.container(border=True):
-            st.download_button(
+            if st.download_button(
                 "⬇  Guardar borrador",
                 data=_session_to_draft(),
                 file_name="borrador.json",
                 mime="application/json",
                 use_container_width=True,
-            )
+            ):
+                st.session_state.draft_saved = True
             st.caption("Descarga el borrador para retomarlo después.")
 
     with _col_load:
@@ -220,6 +223,7 @@ with st.expander("Descargar/Cargar Borrador", expanded=True):
             else:
                 st.session_state.draft_uploader_key += 1
                 st.session_state._show_draft_toast = True
+                st.session_state.draft_saved = True
                 st.rerun()
 
 st.divider()
@@ -329,6 +333,7 @@ for i, slide in enumerate(slides):
 if st.button("＋  Add slide", use_container_width=True):
     slides.append(_new_slide())
     st.session_state.video_bytes = None
+    st.session_state.draft_saved = False
     st.rerun()
 
 st.divider()
@@ -457,3 +462,36 @@ if st.session_state.video_bytes:
         mime="video/mp4",
         use_container_width=True,
     )
+
+# ── Unsaved-changes guard ─────────────────────────────────────────────────────
+
+import streamlit.components.v1 as components  # noqa: E402
+
+_slides_now = st.session_state.slides
+_has_content = len(_slides_now) > 1 or bool(
+    _slides_now
+    and (_slides_now[0]["title"] or _slides_now[0]["body"] or _slides_now[0]["image_bytes"])
+)
+_is_dirty = (
+    _has_content
+    and not st.session_state.video_bytes
+    and not st.session_state.draft_saved
+)
+
+components.html(
+    f"""
+    <script>
+    (function() {{
+        if ({'true' if _is_dirty else 'false'}) {{
+            window.parent.onbeforeunload = function (e) {{
+                e.preventDefault();
+                return e.returnValue = '';
+            }};
+        }} else {{
+            window.parent.onbeforeunload = null;
+        }}
+    }})();
+    </script>
+    """,
+    height=0,
+)

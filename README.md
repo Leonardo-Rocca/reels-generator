@@ -26,7 +26,7 @@ python -m reels_gen.cli --input examples/moons.txt --output reel4.mp4
 
 
  source .venv/bin/activate
- streamlit run app.py
+ streamlit run streamlit_app.py
  # abre http://localhost:8501 en el browser
 
 

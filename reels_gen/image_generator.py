@@ -64,7 +64,12 @@ def generate_all(
     images_dir = assets_images_dir or ASSETS_IMAGES_DIR
     work_dir.mkdir(parents=True, exist_ok=True)
     for i, slide in enumerate(slides):
-        if slide.phrase.image_file:
+        if slide.phrase.video_file:
+            local = images_dir / slide.phrase.video_file
+            if not local.exists():
+                raise FileNotFoundError(f"Video not found: {local}")
+            slide.video_path = local
+        elif slide.phrase.image_file:
             local = images_dir / slide.phrase.image_file
             if not local.exists():
                 raise FileNotFoundError(f"Image not found: {local}")

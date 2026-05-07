@@ -88,6 +88,8 @@ def _new_slide() -> dict:
         "body": "",
         "image_file": None,
         "image_bytes": None,
+        "video_file": None,
+        "video_bytes": None,
         "duration": DEFAULT_DURATION,
     }
 
@@ -117,12 +119,15 @@ def _session_to_draft() -> bytes:
     slides_data = []
     for s in st.session_state.slides:
         img_b64 = base64.b64encode(s["image_bytes"]).decode() if s["image_bytes"] else None
+        vid_b64 = base64.b64encode(s["video_bytes"]).decode() if s.get("video_bytes") else None
         slides_data.append({
             "id": s["id"],
             "title": s["title"],
             "body": s["body"],
             "image_file": s["image_file"],
             "image_b64": img_b64,
+            "video_file": s.get("video_file"),
+            "video_b64": vid_b64,
             "duration": s["duration"],
         })
     draft = {
@@ -146,14 +151,20 @@ def _load_draft(raw: bytes) -> str | None:
     slides = []
     for s in draft.get("slides", []):
         img_bytes = base64.b64decode(s["image_b64"]) if s.get("image_b64") else None
+        vid_bytes = base64.b64decode(s["video_b64"]) if s.get("video_b64") else None
+        new_id = s.get("id") or uuid.uuid4().hex[:8]
         slides.append({
-            "id": s.get("id") or uuid.uuid4().hex[:8],
+            "id": new_id,
             "title": s.get("title", ""),
             "body": s.get("body", ""),
             "image_file": s.get("image_file"),
             "image_bytes": img_bytes,
+            "video_file": s.get("video_file"),
+            "video_bytes": vid_bytes,
             "duration": float(s.get("duration", DEFAULT_DURATION)),
         })
+        if vid_bytes:
+            st.session_state[f"media_type_{new_id}"] = "video"
 
     if not slides:
         return "El borrador no contiene slides."
@@ -302,29 +313,61 @@ for i, slide in enumerate(slides):
             height=80,
         )
 
-        # Image upload (required)
-        uploaded = st.file_uploader(
-            "Image",
-            type=["png", "jpg", "jpeg"],
-            key=f"img_{sid}",
+        # Media type toggle
+        if f"media_type_{sid}" not in st.session_state:
+            st.session_state[f"media_type_{sid}"] = "imagen"
+        media_type = st.radio(
+            "Tipo de media",
+            options=["imagen", "video"],
+            key=f"media_type_{sid}",
+            horizontal=True,
+            label_visibility="collapsed",
         )
-        if uploaded is not None:
-            slide["image_bytes"] = uploaded.getvalue()
-            slide["image_file"] = uploaded.name
-        if slide["image_bytes"]:
-            st.image(slide["image_bytes"], width=200)
-        elif uploaded is None:
+
+        if media_type == "imagen":
+            slide["video_bytes"] = None
+            slide["video_file"] = None
+            uploaded = st.file_uploader(
+                "Imagen",
+                type=["png", "jpg", "jpeg"],
+                key=f"img_{sid}",
+            )
+            if uploaded is not None:
+                slide["image_bytes"] = uploaded.getvalue()
+                slide["image_file"] = uploaded.name
+            if slide["image_bytes"]:
+                st.image(slide["image_bytes"], width=200)
+            elif uploaded is None:
+                slide["image_bytes"] = None
+                slide["image_file"] = None
+        else:
             slide["image_bytes"] = None
             slide["image_file"] = None
+            uploaded_vid = st.file_uploader(
+                "Video",
+                type=["mp4", "mov", "avi", "webm"],
+                key=f"vid_{sid}",
+            )
+            if uploaded_vid is not None:
+                slide["video_bytes"] = uploaded_vid.getvalue()
+                slide["video_file"] = uploaded_vid.name
+            if slide["video_bytes"]:
+                st.video(slide["video_bytes"])
+            elif uploaded_vid is None:
+                slide["video_bytes"] = None
+                slide["video_file"] = None
 
-        slide["duration"] = st.slider(
-            "Duration (seconds)",
-            min_value=1.0,
-            max_value=8.0,
-            step=0.1,
-            value=float(slide["duration"]),
-            key=f"dur_{sid}",
-        )
+        if media_type == "video":
+            st.caption("Duración: definida por el video")
+        else:
+            slide["duration"] = st.slider(
+                "Duration (seconds)",
+                min_value=1.0,
+                max_value=8.0,
+                step=0.1,
+                value=float(slide["duration"]),
+                key=f"dur_{sid}",
+            )
 
     st.write("")  # breathing room between cards
 
@@ -340,37 +383,15 @@ st.divider()
 
 # ── Generate ──────────────────────────────────────────────────────────────────
 
-def _build_txt(slides: list[dict]) -> str:
-    """Convert slide dicts to the .txt format consumed by _parse_txt()."""
-    lines: list[str] = []
-    for s in slides:
-        title = (s["title"] or "").strip()
-        body  = (s["body"]  or "").strip()
-        img   = (s["image_file"] or "").strip()
-
-        if title and body:
-            lines.append(f"<title>{title}</title>")
-            lines.append(f"<body>{body}</body>")
-        elif body:
-            lines.append(f"<body>{body}</body>")
-        else:
-            lines.append(f"<title center>{title}</title>")
-
-        if img:
-            lines.append(f"<image>{img}</image>")
-
-        lines.append(f"<duration>{float(s['duration'])}</duration>")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
 if st.button("▶  Generate Reel", type="primary", use_container_width=True):
 
     # Basic validation
-    missing_images = [i + 1 for i, s in enumerate(slides) if not s["image_bytes"]]
-    if missing_images:
-        st.error(f"Missing image on slide{'s' if len(missing_images) > 1 else ''}: {', '.join(map(str, missing_images))}.")
+    missing_media = [
+        i + 1 for i, s in enumerate(slides)
+        if not s.get("video_bytes") and not s["image_bytes"]
+    ]
+    if missing_media:
+        st.error(f"Falta imagen o video en slide{'s' if len(missing_media) > 1 else ''}: {', '.join(map(str, missing_media))}.")
         st.stop()
 
     from reels_gen.config import Config
@@ -389,20 +410,36 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
 
     from reels_gen.frame_composer import compose_all
     from reels_gen.image_generator import generate_all
-    from reels_gen.input_parser import _parse_txt, build_project
+    from reels_gen.models import Phrase, Slide as SlideModel, Project
     from reels_gen.output_encoder import encode_for_instagram
     from reels_gen.video_assembler import assemble_video
 
-    # Write uploaded images to a temp directory (assets_images_dir)
+    # Write uploaded images/videos to a temp directory (assets_dir)
     assets_dir = Path(tempfile.mkdtemp(prefix="reels_assets_"))
     for s in slides:
         if s["image_bytes"] and s["image_file"]:
             (assets_dir / s["image_file"]).write_bytes(s["image_bytes"])
+        if s.get("video_bytes") and s.get("video_file"):
+            (assets_dir / s["video_file"]).write_bytes(s["video_bytes"])
 
-    phrases     = _parse_txt(_build_txt(slides))
+    # Build Phrase/Slide objects directly
+    slide_objs = []
+    for s in slides:
+        title = (s["title"] or "").strip() or None
+        body  = (s["body"]  or "").strip()
+        if s.get("video_file"):
+            phrase = Phrase(text=body, title=title, video_file=s["video_file"])
+        elif title and body:
+            phrase = Phrase(text=body, title=title, image_file=s["image_file"], duration=float(s["duration"]))
+        elif body:
+            phrase = Phrase(text=body, image_file=s["image_file"], duration=float(s["duration"]))
+        else:
+            phrase = Phrase(text=title or "", body_position="center", image_file=s["image_file"], duration=float(s["duration"]))
+        slide_objs.append(SlideModel(phrase=phrase))
+
     output_path = Path(tempfile.mktemp(suffix=".mp4", prefix="reels_out_"))
-    project     = build_project(phrases, output_path)
-    n           = len(project.slides)
+    project     = Project(slides=slide_objs, output_path=output_path)
+    n = len(project.slides)
 
     cache_dir = Path(".reels_cache")
     cache_dir.mkdir(exist_ok=True)

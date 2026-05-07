@@ -52,13 +52,12 @@ def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[s
         lines.append(" ".join(current))
     return lines
 
-def _draw_text_block(img: Image.Image, lines: list[str], font: ImageFont.FreeTypeFont, text_y: int, config: Config) -> Image.Image:
+def _draw_text_block(img: Image.Image, lines: list[str], font: ImageFont.FreeTypeFont, text_y: int, config: Config, keep_alpha: bool = False) -> Image.Image:
     """Draw a backdrop sized to the text content, then draw the text lines over it."""
     draw = ImageDraw.Draw(img)
     px, py = config.text_backdrop_padding_x, config.text_backdrop_padding_y
     line_height = font.size + 16
 
-    # Measure widest line
     max_line_w = max(draw.textbbox((0, 0), ln, font=font)[2] for ln in lines)
     total_h = len(lines) * line_height
 
@@ -69,7 +68,9 @@ def _draw_text_block(img: Image.Image, lines: list[str], font: ImageFont.FreeTyp
 
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ImageDraw.Draw(overlay).rectangle([backdrop_x0, backdrop_y0, backdrop_x1, backdrop_y1], fill=config.text_backdrop_color)
-    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    img = Image.alpha_composite(img.convert("RGBA"), overlay)
+    if not keep_alpha:
+        img = img.convert("RGB")
 
     draw = ImageDraw.Draw(img)
     for i, line in enumerate(lines):
@@ -79,7 +80,62 @@ def _draw_text_block(img: Image.Image, lines: list[str], font: ImageFont.FreeTyp
 
     return img
 
-def compose_frame(slide: Slide, work_dir: Path, config: Config) -> Path:
+def _compose_video_overlay(slide: Slide, work_dir: Path, config: Config) -> Path | None:
+    """For video slides: produce a transparent PNG with text + logo overlay, or None if nothing to draw."""
+    text = (slide.phrase.text or "").strip()
+    title = (slide.phrase.title or "").strip()
+    has_logo = LOGO_PATH.exists()
+    if not text and not title and not has_logo:
+        slide.frame_path = None
+        return None
+
+    font = ensure_font(config.font_size)
+    max_text_width = config.width - (config.text_backdrop_padding_x + 60) * 2
+    img = Image.new("RGBA", (config.width, config.height), (0, 0, 0, 0))
+
+    if text:
+        lines = wrap_text(text, font, max_text_width)
+        line_height = config.font_size + 16
+        total_h = len(lines) * line_height
+        position = slide.phrase.body_position or config.text_position
+        if position == "bottom":
+            text_y = config.height - total_h - config.text_backdrop_padding_y * 2 - config.text_edge_margin
+        elif position == "center":
+            text_y = (config.height - total_h) // 2
+        else:
+            text_y = config.text_edge_margin
+        if lines:
+            img = _draw_text_block(img, lines, font, text_y, config, keep_alpha=True)
+
+    if title:
+        title_font = ensure_font(config.font_size)
+        title_lines = wrap_text(title, title_font, max_text_width)
+        img = _draw_text_block(img, title_lines, title_font, config.text_edge_margin, config, keep_alpha=True)
+
+    if has_logo:
+        logo = Image.open(LOGO_PATH).convert("RGBA")
+        scale = config.logo_max_width / logo.width
+        logo = logo.resize(
+            (config.logo_max_width, int(logo.height * scale)),
+            Image.Resampling.LANCZOS,
+        )
+        r, g, b, a = logo.split()
+        a = a.point(lambda v: int(v * config.logo_opacity))
+        logo.putalpha(a)
+        x = config.width - logo.width - config.logo_margin
+        y = config.height - logo.height - config.logo_margin_y
+        img.paste(logo, (x, y), mask=logo)
+
+    slide_hash = hashlib.md5(f"overlay|{text}|{title}|{slide.video_path}".encode()).hexdigest()[:8]
+    out_path = work_dir / f"overlay_{slide_hash}.png"
+    img.save(out_path)
+    slide.frame_path = out_path
+    return out_path
+
+
+def compose_frame(slide: Slide, work_dir: Path, config: Config) -> Path | None:
+    if slide.video_path is not None:
+        return _compose_video_overlay(slide, work_dir, config)
     if slide.image_path is None:
         raise ValueError(f"Slide has no image_path: {slide.phrase.text}")
     img = Image.open(slide.image_path).convert("RGB")

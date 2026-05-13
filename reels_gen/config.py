@@ -44,6 +44,9 @@ class Config(BaseModel):
     # Video
     video_bitrate: str = "3500k"
 
+    # Typewriter effect
+    typewriter_mode: bool = False
+
     @classmethod
     def from_env(cls) -> Self:
         return cls(hf_token=os.getenv("HF_TOKEN", ""))

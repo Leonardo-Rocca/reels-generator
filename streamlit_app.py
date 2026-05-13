@@ -46,7 +46,7 @@ if not os.getenv("HF_TOKEN") and "HF_TOKEN" in st.secrets:
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="Reels Studio",
+page_title="Reels Studio",
     page_icon="🎬",
     layout="centered",
     initial_sidebar_state="collapsed",
@@ -90,6 +90,7 @@ def _new_slide() -> dict:
         "image_bytes": None,
         "video_file": None,
         "video_bytes": None,
+        "video_duration": None,  # actual duration of uploaded video (seconds)
         "duration": DEFAULT_DURATION,
     }
 
@@ -128,6 +129,7 @@ def _session_to_draft() -> bytes:
             "image_b64": img_b64,
             "video_file": s.get("video_file"),
             "video_b64": vid_b64,
+            "video_duration": s.get("video_duration"),
             "duration": s["duration"],
         })
     draft = {
@@ -153,6 +155,7 @@ def _load_draft(raw: bytes) -> str | None:
         img_bytes = base64.b64decode(s["image_b64"]) if s.get("image_b64") else None
         vid_bytes = base64.b64decode(s["video_b64"]) if s.get("video_b64") else None
         new_id = s.get("id") or uuid.uuid4().hex[:8]
+        _vdur = float(s["video_duration"]) if s.get("video_duration") else None
         slides.append({
             "id": new_id,
             "title": s.get("title", ""),
@@ -161,10 +164,13 @@ def _load_draft(raw: bytes) -> str | None:
             "image_bytes": img_bytes,
             "video_file": s.get("video_file"),
             "video_bytes": vid_bytes,
+            "video_duration": _vdur,
             "duration": float(s.get("duration", DEFAULT_DURATION)),
         })
         if vid_bytes:
             st.session_state[f"media_type_{new_id}"] = "video"
+            if _vdur:
+                st.session_state[f"dur_{new_id}"] = float(s.get("duration", _vdur))
 
     if not slides:
         return "El borrador no contiene slides."
@@ -274,6 +280,19 @@ for _row_items in (_palette_items[:_mid], _palette_items[_mid:]):
 
 st.divider()
 
+# ── Text animation mode ───────────────────────────────────────────────────────
+
+st.caption("ANIMACIÓN DE TEXTO")
+st.radio(
+    "Animación de texto",
+    options=["Texto estático", "Texto animado  ✦"],
+    key="text_mode",
+    horizontal=True,
+    label_visibility="collapsed",
+)
+
+st.divider()
+
 # ── Slide cards ───────────────────────────────────────────────────────────────
 
 for i, slide in enumerate(slides):
@@ -349,16 +368,53 @@ for i, slide in enumerate(slides):
                 key=f"vid_{sid}",
             )
             if uploaded_vid is not None:
+                _is_new_video = slide.get("video_file") != uploaded_vid.name
                 slide["video_bytes"] = uploaded_vid.getvalue()
                 slide["video_file"] = uploaded_vid.name
+                if _is_new_video or slide.get("video_duration") is None:
+                    _tmp = tempfile.NamedTemporaryFile(
+                        suffix=Path(uploaded_vid.name).suffix, delete=False
+                    )
+                    try:
+                        _tmp.write(slide["video_bytes"])
+                        _tmp.close()
+                        from moviepy import VideoFileClip as _VFC
+                        _vc = _VFC(_tmp.name)
+                        _vdur = round(_vc.duration, 1)
+                        _vc.close()
+                    except Exception:
+                        _vdur = None
+                    finally:
+                        os.unlink(_tmp.name)
+                    slide["video_duration"] = _vdur
+                    slide["duration"] = _vdur or DEFAULT_DURATION
+                    st.session_state[f"dur_{sid}"] = slide["duration"]
             if slide["video_bytes"]:
                 st.video(slide["video_bytes"])
             elif uploaded_vid is None:
                 slide["video_bytes"] = None
                 slide["video_file"] = None
+                slide["video_duration"] = None
 
         if media_type == "video":
-            st.caption("Duración: definida por el video")
+            _vdur = slide.get("video_duration")
+            if _vdur and _vdur > 1.0:
+                _dur_key = f"dur_{sid}"
+                if _dur_key in st.session_state:
+                    st.session_state[_dur_key] = min(float(st.session_state[_dur_key]), _vdur)
+                slide["duration"] = st.slider(
+                    "Duración (segundos)",
+                    min_value=1.0,
+                    max_value=float(_vdur),
+                    step=0.1,
+                    value=min(float(slide["duration"]), float(_vdur)),
+                    key=_dur_key,
+                    help="Trunca el video desde el final",
+                )
+            elif _vdur:
+                st.caption(f"Duración: {_vdur:.1f}s")
+            else:
+                st.caption("Duración: definida por el video")
         else:
             slide["duration"] = st.slider(
                 "Duration (seconds)",
@@ -399,6 +455,7 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
     _bg = BACKDROP_PALETTE[st.session_state.get("backdrop_color_key", "Original")]
     config.text_backdrop_color = (*_bg, BACKDROP_ALPHA)
     config.text_color = _text_color_for_bg(*_bg)
+    config.typewriter_mode = st.session_state.get("text_mode", "Texto estático") != "Texto estático"
 
     if not config.hf_token:
         st.error(
@@ -428,7 +485,7 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
         title = (s["title"] or "").strip() or None
         body  = (s["body"]  or "").strip()
         if s.get("video_file"):
-            phrase = Phrase(text=body, title=title, video_file=s["video_file"])
+            phrase = Phrase(text=body, title=title, video_file=s["video_file"], duration=float(s["duration"]))
         elif title and body:
             phrase = Phrase(text=body, title=title, image_file=s["image_file"], duration=float(s["duration"]))
         elif body:

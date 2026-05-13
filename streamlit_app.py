@@ -15,7 +15,6 @@ from pathlib import Path
 BACKDROP_PALETTE: dict[str, tuple[int, int, int]] = {
     "#130e2d": (20, 10, 45),
     "#231F20": (35, 31, 32),
-    "#000000": (0, 0, 0),
     "#264F5E": (38, 79, 94),
     "#7A5C3A": (122, 92, 58),
     "#4D7D7D": (77, 125, 125),
@@ -33,6 +32,11 @@ BACKDROP_ALPHA = 170
 def _text_color_for_bg(r: int, g: int, b: int) -> str:
     """Return 'white' or 'black' based on perceived luminance (ITU-R BT.601)."""
     return "black" if (r * 299 + g * 587 + b * 114) / 1000 > 128 else "white"
+
+
+def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
+    h = hex_str.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -276,7 +280,24 @@ for _row_items in (_palette_items[:_mid], _palette_items[_mid:]):
                 use_container_width=True,
             ):
                 st.session_state.backdrop_color_key = _name
+                st.session_state.backdrop_custom_color = _name
                 st.rerun()
+
+_picker_col, _picker_label_col = st.columns([1, 8])
+with _picker_col:
+    _custom_val = st.color_picker(
+        "Personalizado",
+        value=st.session_state.backdrop_color_key
+              if st.session_state.backdrop_color_key.startswith("#") and len(st.session_state.backdrop_color_key) == 7
+              else "#130e2d",
+        key="backdrop_custom_color",
+        label_visibility="collapsed",
+    )
+with _picker_label_col:
+    st.caption("Color personalizado (hex)")
+if _custom_val != st.session_state.backdrop_color_key:
+    st.session_state.backdrop_color_key = _custom_val
+    st.rerun()
 
 st.divider()
 
@@ -452,7 +473,8 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
 
     from reels_gen.config import Config
     config = Config.from_env()
-    _bg = BACKDROP_PALETTE[st.session_state.get("backdrop_color_key", "Original")]
+    _color_key = st.session_state.get("backdrop_color_key", next(iter(BACKDROP_PALETTE)))
+    _bg = BACKDROP_PALETTE.get(_color_key) or _hex_to_rgb(_color_key)
     config.text_backdrop_color = (*_bg, BACKDROP_ALPHA)
     config.text_color = _text_color_for_bg(*_bg)
     config.typewriter_mode = st.session_state.get("text_mode", "Texto estático") != "Texto estático"

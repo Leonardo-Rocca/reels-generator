@@ -206,7 +206,8 @@ def compose_all(slides: list[Slide], work_dir: Path, config: Config, progress_ca
             progress_callback(i + 1, len(slides))
 
 
-_REVEAL_FRACTION = 0.4  # fraction of slide duration used for typing
+_CHARS_PER_SECOND = 10.0  # constant typing speed
+_REVEAL_FRACTION = 0.4    # fallback: if constant speed is too slow to fit, accelerate to finish here
 
 
 def _typewriter_layout(slide: Slide, config: Config):
@@ -264,7 +265,7 @@ def make_image_typewriter_func(slide: Slide, config: Config, duration: float) ->
     base_img = _apply_logo(base_img, config)
 
     full_lines, full_title_lines, text_y, title_chars, _, total_chars, font = _typewriter_layout(slide, config)
-    speed = total_chars / (duration * _REVEAL_FRACTION) if total_chars > 0 else 1.0
+    speed = max(_CHARS_PER_SECOND, total_chars / (duration * _REVEAL_FRACTION)) if total_chars > 0 else 1.0
 
     def make_frame(t: float) -> np.ndarray:
         n = min(int(t * speed), total_chars)
@@ -277,7 +278,7 @@ def make_image_typewriter_func(slide: Slide, config: Config, duration: float) ->
 def make_video_overlay_typewriter_func(slide: Slide, config: Config, duration: float) -> Callable[[float], np.ndarray]:
     """Return make_rgba_frame(t) → RGBA numpy array for typewriter overlay on a video slide."""
     full_lines, full_title_lines, text_y, title_chars, _, total_chars, font = _typewriter_layout(slide, config)
-    speed = total_chars / (duration * _REVEAL_FRACTION) if total_chars > 0 else 1.0
+    speed = max(_CHARS_PER_SECOND, total_chars / (duration * _REVEAL_FRACTION)) if total_chars > 0 else 1.0
 
     static_base = _apply_logo(Image.new("RGBA", (config.width, config.height), (0, 0, 0, 0)), config)
 

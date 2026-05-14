@@ -93,8 +93,9 @@ def _new_slide() -> dict:
         "image_file": None,
         "image_bytes": None,
         "video_file": None,
-        "video_bytes": None,
-        "video_duration": None,  # actual duration of uploaded video (seconds)
+        "video_path": None,      # path to temp file on disk (never stored as bytes)
+        "video_duration": None,
+        "media_type": "imagen",  # "imagen" | "video" — persisted here, not in widget state
         "duration": DEFAULT_DURATION,
     }
 
@@ -115,8 +116,19 @@ slides: list[dict] = st.session_state.slides
 
 def _delete_slide(idx: int) -> None:
     """on_click callback — index is captured at render time via args=(i,)."""
+    slide = st.session_state.slides[idx]
+    _unlink_video(slide)
     st.session_state.slides.pop(idx)
     st.session_state.video_bytes = None
+
+
+def _unlink_video(slide: dict) -> None:
+    p = slide.get("video_path")
+    if p:
+        try:
+            Path(p).unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _session_to_draft() -> bytes:
@@ -124,7 +136,8 @@ def _session_to_draft() -> bytes:
     slides_data = []
     for s in st.session_state.slides:
         img_b64 = base64.b64encode(s["image_bytes"]).decode() if s["image_bytes"] else None
-        vid_b64 = base64.b64encode(s["video_bytes"]).decode() if s.get("video_bytes") else None
+        _vp = s.get("video_path")
+        vid_b64 = base64.b64encode(Path(_vp).read_bytes()).decode() if _vp and Path(_vp).exists() else None
         slides_data.append({
             "id": s["id"],
             "title": s["title"],
@@ -134,6 +147,7 @@ def _session_to_draft() -> bytes:
             "video_file": s.get("video_file"),
             "video_b64": vid_b64,
             "video_duration": s.get("video_duration"),
+            "media_type": s.get("media_type", "imagen"),
             "duration": s["duration"],
         })
     draft = {
@@ -154,12 +168,22 @@ def _load_draft(raw: bytes) -> str | None:
     if draft.get("version") != 1:
         return "Versión de borrador no soportada."
 
+    # Clean up temp files from current slides before replacing
+    for _old in st.session_state.slides:
+        _unlink_video(_old)
+
     slides = []
     for s in draft.get("slides", []):
         img_bytes = base64.b64decode(s["image_b64"]) if s.get("image_b64") else None
-        vid_bytes = base64.b64decode(s["video_b64"]) if s.get("video_b64") else None
         new_id = s.get("id") or uuid.uuid4().hex[:8]
         _vdur = float(s["video_duration"]) if s.get("video_duration") else None
+        _vpath = None
+        if s.get("video_b64") and s.get("video_file"):
+            _tmp = tempfile.NamedTemporaryFile(suffix=Path(s["video_file"]).suffix, delete=False)
+            _tmp.write(base64.b64decode(s["video_b64"]))
+            _tmp.close()
+            _vpath = _tmp.name
+        _mtype = s.get("media_type", "video" if _vpath else "imagen")
         slides.append({
             "id": new_id,
             "title": s.get("title", ""),
@@ -167,14 +191,13 @@ def _load_draft(raw: bytes) -> str | None:
             "image_file": s.get("image_file"),
             "image_bytes": img_bytes,
             "video_file": s.get("video_file"),
-            "video_bytes": vid_bytes,
+            "video_path": _vpath,
             "video_duration": _vdur,
+            "media_type": _mtype,
             "duration": float(s.get("duration", DEFAULT_DURATION)),
         })
-        if vid_bytes:
-            st.session_state[f"media_type_{new_id}"] = "video"
-            if _vdur:
-                st.session_state[f"dur_{new_id}"] = float(s.get("duration", _vdur))
+        if _vdur:
+            st.session_state[f"dur_{new_id}"] = float(s.get("duration", _vdur))
 
     if not slides:
         return "El borrador no contiene slides."
@@ -353,20 +376,34 @@ for i, slide in enumerate(slides):
             height=80,
         )
 
-        # Media type toggle
-        if f"media_type_{sid}" not in st.session_state:
-            st.session_state[f"media_type_{sid}"] = "imagen"
+        # Media type toggle.
+        # slide["media_type"] is the persistent source of truth (lives in session_state.slides).
+        # Widget session state can be cleared by st.rerun() — we re-seed it from the slide
+        # dict ONLY when it's missing (i.e. after a rerun cleared it), never overwriting a
+        # legitimate user interaction.
+        _prev_media = slide.get("media_type", "imagen")
+        _mt_key = f"media_type_{sid}"
+        if _mt_key in st.session_state:
+            # Capture any user interaction that happened this rerun
+            slide["media_type"] = st.session_state[_mt_key]
+        # Re-seed so the widget shows the right value even if cleared by rerun
+        st.session_state[_mt_key] = slide.get("media_type", "imagen")
         media_type = st.radio(
             "Tipo de media",
             options=["imagen", "video"],
-            key=f"media_type_{sid}",
+            key=_mt_key,
             horizontal=True,
             label_visibility="collapsed",
         )
+        slide["media_type"] = media_type
 
         if media_type == "imagen":
-            slide["video_bytes"] = None
-            slide["video_file"] = None
+            if _prev_media == "video":
+                # User explicitly switched away — clean up temp file
+                _unlink_video(slide)
+                slide["video_path"] = None
+                slide["video_file"] = None
+                slide["video_duration"] = None
             uploaded = st.file_uploader(
                 "Imagen",
                 type=["png", "jpg", "jpeg"],
@@ -389,15 +426,14 @@ for i, slide in enumerate(slides):
                 key=f"vid_{sid}",
             )
             if uploaded_vid is not None:
-                _is_new_video = slide.get("video_file") != uploaded_vid.name
-                slide["video_bytes"] = uploaded_vid.getvalue()
-                slide["video_file"] = uploaded_vid.name
-                if _is_new_video or slide.get("video_duration") is None:
+                if slide.get("video_file") != uploaded_vid.name:
+                    # New file — write to temp and read duration
+                    _unlink_video(slide)
                     _tmp = tempfile.NamedTemporaryFile(
                         suffix=Path(uploaded_vid.name).suffix, delete=False
                     )
                     try:
-                        _tmp.write(slide["video_bytes"])
+                        _tmp.write(uploaded_vid.getvalue())
                         _tmp.close()
                         from moviepy import VideoFileClip as _VFC
                         _vc = _VFC(_tmp.name)
@@ -405,17 +441,14 @@ for i, slide in enumerate(slides):
                         _vc.close()
                     except Exception:
                         _vdur = None
-                    finally:
-                        os.unlink(_tmp.name)
+                    slide["video_path"] = _tmp.name
+                    slide["video_file"] = uploaded_vid.name
                     slide["video_duration"] = _vdur
                     slide["duration"] = _vdur or DEFAULT_DURATION
                     st.session_state[f"dur_{sid}"] = slide["duration"]
-            if slide["video_bytes"]:
-                st.video(slide["video_bytes"])
-            elif uploaded_vid is None:
-                slide["video_bytes"] = None
-                slide["video_file"] = None
-                slide["video_duration"] = None
+            if slide.get("video_path") and Path(slide["video_path"]).exists():
+                with open(slide["video_path"], "rb") as _f:
+                    st.video(_f)
 
         if media_type == "video":
             _vdur = slide.get("video_duration")
@@ -465,7 +498,7 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
     # Basic validation
     missing_media = [
         i + 1 for i, s in enumerate(slides)
-        if not s.get("video_bytes") and not s["image_bytes"]
+        if not s.get("video_path") and not s["image_bytes"]
     ]
     if missing_media:
         st.error(f"Falta imagen o video en slide{'s' if len(missing_media) > 1 else ''}: {', '.join(map(str, missing_media))}.")
@@ -498,8 +531,8 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
     for s in slides:
         if s["image_bytes"] and s["image_file"]:
             (assets_dir / s["image_file"]).write_bytes(s["image_bytes"])
-        if s.get("video_bytes") and s.get("video_file"):
-            (assets_dir / s["video_file"]).write_bytes(s["video_bytes"])
+        if s.get("video_path") and s.get("video_file") and Path(s["video_path"]).exists():
+            shutil.copy(s["video_path"], assets_dir / s["video_file"])
 
     # Build Phrase/Slide objects directly
     slide_objs = []
@@ -586,7 +619,7 @@ import streamlit.components.v1 as components  # noqa: E402
 _slides_now = st.session_state.slides
 _has_content = len(_slides_now) > 1 or bool(
     _slides_now
-    and (_slides_now[0]["title"] or _slides_now[0]["body"] or _slides_now[0]["image_bytes"])
+    and (_slides_now[0]["title"] or _slides_now[0]["body"] or _slides_now[0]["image_bytes"] or _slides_now[0].get("video_path"))
 )
 _is_dirty = (
     _has_content

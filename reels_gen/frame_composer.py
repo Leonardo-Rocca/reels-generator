@@ -206,7 +206,7 @@ def compose_all(slides: list[Slide], work_dir: Path, config: Config, progress_ca
             progress_callback(i + 1, len(slides))
 
 
-_CHARS_PER_SECOND = 10.0  # constant typing speed
+_CHARS_PER_SECOND = 30.0  # constant typing speed
 _REVEAL_FRACTION = 0.4    # fallback: if constant speed is too slow to fit, accelerate to finish here
 
 

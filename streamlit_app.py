@@ -122,6 +122,15 @@ def _delete_slide(idx: int) -> None:
     st.session_state.video_bytes = None
 
 
+def _move_slide(idx: int, direction: int) -> None:
+    """Swap slide at idx with its neighbour. direction: -1 up, +1 down."""
+    slides = st.session_state.slides
+    target = idx + direction
+    if 0 <= target < len(slides):
+        slides[idx], slides[target] = slides[target], slides[idx]
+        st.session_state.video_bytes = None
+
+
 def _unlink_video(slide: dict) -> None:
     p = slide.get("video_path")
     if p:
@@ -344,12 +353,30 @@ for i, slide in enumerate(slides):
 
     with st.container(border=True):
 
-        # Header row: slide number + delete button
-        col_num, col_del = st.columns([8, 1])
+        # Header row: slide number + reorder buttons + delete button
+        col_num, col_up, col_dn, col_del = st.columns([6, 1, 1, 1])
         with col_num:
             st.markdown(
                 f'<p class="slide-num">Slide {i + 1:02d}</p>',
                 unsafe_allow_html=True,
+            )
+        with col_up:
+            st.button(
+                "↑",
+                key=f"up_{sid}",
+                disabled=i == 0,
+                help="Mover arriba",
+                on_click=_move_slide,
+                args=(i, -1),
+            )
+        with col_dn:
+            st.button(
+                "↓",
+                key=f"dn_{sid}",
+                disabled=i == len(slides) - 1,
+                help="Mover abajo",
+                on_click=_move_slide,
+                args=(i, 1),
             )
         with col_del:
             st.button(

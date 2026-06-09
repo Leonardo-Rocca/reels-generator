@@ -2,9 +2,18 @@ import subprocess
 from pathlib import Path
 from .config import Config
 
+
+def _ffmpeg_exe() -> str:
+    try:
+        from imageio_ffmpeg import get_ffmpeg_exe
+        return get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
+
 def encode_for_instagram(input_path: Path, output_path: Path, config: Config) -> Path:
     cmd = [
-        "ffmpeg", "-y",
+        _ffmpeg_exe(), "-y",
         "-i", str(input_path),
         "-vf", f"scale={config.width}:{config.height},fps={config.fps}",
         "-c:v", "libx264",

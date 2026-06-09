@@ -539,11 +539,16 @@ if st.button("▶  Generate Reel", type="primary", use_container_width=True):
     config.text_color = _text_color_for_bg(*_bg)
     config.typewriter_mode = st.session_state.get("text_mode", "Texto estático") != "Texto estático"
 
-    if not config.hf_token:
+    _needs_ai = any(
+        not s["image_bytes"] and not s.get("video_path")
+        for s in slides
+    )
+    if _needs_ai and not config.hf_token:
         st.error(
-            "**HF_TOKEN not set.**  \n"
-            "Locally: add it to `.env`.  \n"
-            "Streamlit Cloud: add it under *Settings → Secrets*."
+            "**HF_TOKEN no configurado.**  \n"
+            "Uno o más slides no tienen imagen ni video — se necesita el token de HuggingFace para generarlos.  \n"
+            "Localmente: agregarlo a `.env` como `HF_TOKEN=tu_token`.  \n"
+            "Streamlit Cloud: agregarlo en *Settings → Secrets*."
         )
         st.stop()
 
